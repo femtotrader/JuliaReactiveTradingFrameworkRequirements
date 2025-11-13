@@ -33,8 +33,8 @@ This document specifies requirements for the Reactive Trading System using the E
 - **Exchange Integration**: Modular exchange connectivity (e.g., Binance.jl for Binance)
 - **Technical Indicators**: OnlineTechnicalIndicators.jl for signal generation
 - **Performance Analytics**: OnlinePortfolioAnalytics.jl for metrics
-- **Time Resampling**: OnlineResamplers.jl (https://github.com/femtotrader/OnlineResamplers.jl) for streaming data aggregation
-- **Time Management**: Timestamps64 for precise temporal operations
+- **Time Resampling**: OnlineResamplers.jl for streaming data aggregation
+- **Time Management**: Timestamps64.jl for precise temporal operations
 - **Web Interface**: Genie.jl for user interaction and visualization
 
 ### EARS Patterns
