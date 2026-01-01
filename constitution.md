@@ -1,14 +1,16 @@
 <!--
   SYNC IMPACT REPORT
   ===================
-  Version change: 1.7.0 → 1.7.1
-  Bump rationale: PATCH - Documentation update to reflect completed MCP module structure
+  Version change: 1.7.1 → 1.8.0
+  Bump rationale: MINOR - Added new Time Management principle (IX) for Clock abstraction
 
   Modified principles:
     - None modified
 
   Added sections:
-    - Module Organization: Added MCP/ module entry with tool files
+    - Principle IX: Time Management and Clock Abstraction
+    - Technology Stack: Added Clock types entry
+    - Module Organization: Added Clock.jl to Core module
 
   Removed sections: None
 
@@ -181,6 +183,30 @@ LLM-based natural language interaction.
 while maintaining separation from the web interface and ensuring safe operation
 through stateless, read-mostly tool design.
 
+### IX. Time Management and Clock Abstraction
+
+The system MUST use a unified Clock abstraction for time management across all
+trading modes (live, paper, backtest).
+
+- All time-dependent components MUST use the `AbstractClock` interface for time queries
+- `RealTimeClock` MUST be used for live and paper trading modes, returning actual
+  system UTC time via `now(Timestamp64, UTC)` from Timestamps64
+- `SimulationClock` MUST be used for backtesting, with time advanced by the backtest
+  engine as it processes historical data
+- All time values MUST be in UTC for consistency across exchanges and markets
+- Risk management daily resets MUST use `today_utc(clock)` to correctly track trading
+  days in both real-time and simulated modes
+- The backtest engine MUST call `advance!(clock, timestamp)` for each market data point
+  to ensure all time-dependent calculations use the simulated date
+- Components that depend on time (RiskManager, MetricsCollector) MUST accept a clock
+  parameter and default to `DEFAULT_CLOCK` (RealTimeClock) when not provided
+
+**Rationale**: A shared Clock abstraction ensures that time-dependent logic (daily
+P&L resets, drawdown calculations, timestamp comparisons) works correctly in both
+real-time and backtesting modes. Without this abstraction, components using `today()`
+would see the actual system date during backtests, causing incorrect daily limit
+tracking across multi-year historical simulations.
+
 ## Technology Stack
 
 The following technology choices are NON-NEGOTIABLE for this project:
@@ -199,6 +225,14 @@ The following technology choices are NON-NEGOTIABLE for this project:
 | Charting | LightweightCharts.jl | Interactive OHLCV visualization |
 | LLM Integration | ModelContextProtocol.jl | MCP server for natural language access |
 
+**Core Types**:
+
+| Type | Module | Purpose |
+|------|--------|---------|
+| `AbstractClock` | Core | Base type for clock implementations |
+| `RealTimeClock` | Core | Real UTC time for live/paper trading |
+| `SimulationClock` | Core | Simulated time for backtesting |
+
 **Constraints**:
 - Julia version: 1.12+ required
 - All dependencies MUST be registered Julia packages or documented local packages
@@ -214,6 +248,7 @@ The codebase follows this module structure:
 src/
 ├── Core/                      # Level 0: Foundational types (no dependencies)
 │   ├── Core.jl                # Module definition
+│   ├── Clock.jl               # AbstractClock, RealTimeClock, SimulationClock
 │   ├── MarketData.jl          # TradingPair, MarketData, TradingSignal, market_timestamp
 │   ├── ErrorHandling.jl       # Error types, CircuitBreaker
 │   └── ReactiveCore.jl        # Rocket.jl reactive operators
@@ -255,6 +290,8 @@ src/
 │       ├── DataTools.jl       # list_datasets, import_candles, get_import_status
 │       ├── ExportTools.jl     # export_backtest (JSON/TOON)
 │       └── QueryTools.jl      # search_backtests
+├── risk/                      # Risk management (not yet modularized)
+│   └── RiskManager.jl         # Uses Clock for daily reset tracking
 ├── portfolio/                 # Portfolio management (not yet modularized)
 ├── cli/                       # CLI commands (not yet modularized)
 └── ReactiveTradingSystem.jl   # Root module
@@ -327,6 +364,12 @@ julia --project=. bin/mcp_server.jl
    - Julia format string: `dateformat"yyyy-mm-ddTHH:MM:SS.sss"`
    - This format ensures cross-platform compatibility (JavaScript Date parsing)
 
+6. **Time Management**:
+   - All time-dependent components MUST use Clock abstraction
+   - Never use `today()` or `now()` directly; use `today_utc(clock)` or `now_utc(clock)`
+   - Components MUST accept optional `clock` parameter defaulting to `DEFAULT_CLOCK`
+   - Backtesting code MUST create `SimulationClock` and advance it with data timestamps
+
 ### Enum Definition Pattern
 
 All enums MUST be wrapped in a module to avoid naming collisions:
@@ -347,6 +390,7 @@ provide namespace clarity, and enable better IDE autocomplete.
 ### File Naming Conventions
 
 - **PascalCase** for module files: `ReactiveCore.jl`, `PortfolioManager.jl`
+- **lowercase** for type files in Core: `Clock.jl` (contains types, not a module)
 - **snake_case** for test files: `strategies_test.jl`, `integration_test.jl`
 - **lowercase** for example files: `random_strategy.jl`, `backtest_example.jl`
 
@@ -380,6 +424,7 @@ Before merging any PR, verify:
 - [ ] Reactive pipeline integration tested
 - [ ] Web interface changes do not couple to trading core
 - [ ] MCP tools wrap service layer (no duplicate business logic)
+- [ ] Time-dependent code uses Clock abstraction (not raw `today()`/`now()`)
 
 ## Governance
 
@@ -411,7 +456,22 @@ In case of conflict:
 3. Implementation Plans (plan.md)
 4. Task Lists (tasks.md)
 
-## Appendix 1: EARS Quick Reference
+## Appendix A: Kiro Document Reference
+
+This project was initially developed using Kiro.dev before migrating to Github Spec Kit.
+The original Kiro steering documents are preserved in `.kiro/` for historical reference:
+
+| Document | Location | Content |
+|----------|----------|---------|
+| Product Overview | `.kiro/steering/product.md` | Project vision and capabilities |
+| Technical Stack | `.kiro/steering/tech.md` | Dependencies and commands |
+| Project Structure | `.kiro/steering/structure.md` | Module organization |
+| Feature Specs | `.kiro/specs/` | Detailed requirements per feature |
+
+These documents informed the principles in this constitution. When updating principles,
+consult the original Kiro documents for additional context on design rationale.
+
+## Appendix B: EARS Quick Reference
 
 **EARS (Easy Approach to Requirements Syntax)** is a structured syntax for writing
 unambiguous, testable requirements. Each pattern addresses a specific behavioral context.
@@ -426,6 +486,7 @@ No precondition - the behavior is always active.
 - The system SHALL use Timestamps64 for all time values.
 - The system SHALL maintain O(1) memory per observation.
 - The system SHALL log all trading signals to the audit trail.
+- The system SHALL use Clock abstraction for all time-dependent operations.
 
 ### Pattern 2: Event-Driven (Triggered by Event)
 
@@ -437,6 +498,7 @@ Behavior occurs in response to a specific event.
 - WHEN market data arrives, the system SHALL invoke `_fit!` on active strategies.
 - WHEN a strategy generates a BUY signal, the system SHALL validate against risk limits.
 - WHEN the user requests a backtest, the system SHALL replay historical data.
+- WHEN the backtest processes a data point, the system SHALL advance the SimulationClock.
 
 ### Pattern 3: State-Driven (Active During State)
 
@@ -448,6 +510,7 @@ Behavior is active only while the system is in a specific state.
 - WHILE in paper trading mode, the system SHALL simulate order fills.
 - WHILE connected to Binance WebSocket, the system SHALL process ticker updates.
 - WHILE a drawdown exceeds 10%, the system SHALL reduce position sizes.
+- WHILE in backtesting mode, the system SHALL use SimulationClock for time queries.
 
 ### Pattern 4: Unwanted Behavior (Error Handling)
 
@@ -492,4 +555,4 @@ Complex requirements may combine patterns:
 | SHOULD NOT | Discouraged | Avoid unless justified |
 | MAY | Optional | Implementer's discretion |
 
-**Version**: 1.7.1 | **Ratified**: 2025-12-15 | **Last Amended**: 2025-12-26
+**Version**: 1.8.0 | **Ratified**: 2025-12-15 | **Last Amended**: 2025-12-31
