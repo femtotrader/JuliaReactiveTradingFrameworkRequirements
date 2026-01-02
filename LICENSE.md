@@ -44,7 +44,7 @@ This agreement shall be governed by and construed in accordance with the laws
 of France, without regard to its conflict of law provisions.
 
 8. ENTIRE AGREEMENT
-This agreement constitutes the entire agreement between you and [Company Name] 
+This agreement constitutes the entire agreement between you and FemtoTrader 
 regarding the software and supersedes all prior agreements and understandings.
 
 By using this software, you acknowledge that you have read, understood, and 
